@@ -1,0 +1,47 @@
+[
+  {
+    "id": "1783288123699",
+    "title": "hi",
+    "messages": [
+      {
+        "role": "user",
+        "content": "hi"
+      },
+      {
+        "role": "assistant",
+        "content": "How can I assist you today? We didn't have a conversation prior to this, but I'm happy to start fresh!"
+      }
+    ],
+    "timestamp": "2026-07-05T21:48:43.700Z"
+  },
+  {
+    "id": "1783287993887",
+    "title": "kneuhdeu",
+    "messages": [
+      {
+        "role": "user",
+        "content": "kneuhdeu"
+      },
+      {
+        "role": "assistant",
+        "content": "It seems like you may have entered a non-standard character or made a typo. Could you please try again? What were you trying to communicate? I'll do my best to help."
+      }
+    ],
+    "timestamp": "2026-07-05T21:46:33.887Z"
+  },
+  {
+    "id": "1783287968384",
+    "title": "iwjduhdw",
+    "messages": [
+      {
+        "role": "user",
+        "content": "iwjduhdw"
+      },
+      {
+        "role": "assistant",
+        "content": "It seems like you may have accidentally typed some random characters. Would you like to start fresh and ask me something or need help with something? I'm here to assist you! \n\n(Also, I remember that this is our first conversation, so we don't have any history to recall)"
+      }
+    ],
+    "timestamp": "2026-07-05T21:46:08.384Z"
+  }
+]
