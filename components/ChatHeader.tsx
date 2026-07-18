@@ -1,6 +1,8 @@
 "use client";
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Search, Share2, User, LogOut, X } from 'lucide-react';
+import { logoutAction } from '@/app/signup/auth';
+import { useSettingsModal } from '@/app/contexts/SettingsModalContext';
 
 type ChatHeaderProps = {
   currentChatId: string | null;
@@ -19,6 +21,23 @@ export default function ChatHeader({
 }: ChatHeaderProps) {
   const [shareCopied, setShareCopied] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [user, setUser] = useState<{ id: string; name: string; email: string } | null>(null);
+
+  const { openSettings } = useSettingsModal();
+
+  // Fix: pehle "Alex Rivers" hardcoded tha — ab real logged-in user backend se aata hai
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await fetch('/api/me');
+        const data = res.ok ? await res.json() : { user: null };
+        setUser(data.user ? { id: data.user.id, name: data.user.name, email: data.user.email } : null);
+      } catch (err) {
+        console.error("Failed to load user:", err);
+      }
+    };
+    fetchUser();
+  }, []);
 
   const handleShareChat = async () => {
     try {
@@ -28,6 +47,22 @@ export default function ChatHeader({
       setTimeout(() => setShareCopied(false), 2000);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleOpenSettings = () => {
+    setProfileMenuOpen(false);
+    openSettings();
+  };
+
+  const handleSignOut = async () => {
+    setProfileMenuOpen(false);
+    try {
+      await logoutAction();
+      window.location.href = "/login";
+    } catch (error) {
+      console.error("Logout failed:", error);
+      window.location.href = "/login";
     }
   };
 
@@ -89,7 +124,7 @@ export default function ChatHeader({
             onClick={() => setProfileMenuOpen(!profileMenuOpen)}
             className="w-7 h-7 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-full text-[10px] font-mono font-bold text-white flex items-center justify-center cursor-pointer shadow-md transition-all"
           >
-            AN
+            {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
           </button>
 
           {profileMenuOpen && (
@@ -97,13 +132,13 @@ export default function ChatHeader({
               <div className="fixed inset-0 z-40" onClick={() => setProfileMenuOpen(false)} />
               <div className="absolute right-0 mt-2 w-48 bg-[#0F1217] border border-white/5 rounded-2xl p-2 shadow-2xl z-50">
                 <div className="px-3 py-2 border-b border-white/[0.03] text-left">
-                  <p className="text-xs font-bold text-white">Alex Rivers</p>
-                  <p className="text-[10px] text-gray-500 font-mono mt-0.5">alex@neuro-suite.io</p>
+                  <p className="text-xs font-bold text-white">{user?.name || "Guest User"}</p>
+                  <p className="text-[10px] text-gray-500 font-mono mt-0.5">{user?.email || "Not logged in"}</p>
                 </div>
-                <button onClick={() => { alert('Account Settings'); setProfileMenuOpen(false); }} className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-xs text-gray-400 hover:text-white hover:bg-white/[0.02] rounded-xl transition-all mt-1">
+                <button onClick={handleOpenSettings} className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-xs text-gray-400 hover:text-white hover:bg-white/[0.02] rounded-xl transition-all mt-1">
                   <User size={13} className="text-cyan-400" /> Account Settings
                 </button>
-                <button onClick={() => { alert('Signed Out'); setProfileMenuOpen(false); }} className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 rounded-xl transition-all">
+                <button onClick={handleSignOut} className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 rounded-xl transition-all">
                   <LogOut size={13} /> Sign Out
                 </button>
               </div>

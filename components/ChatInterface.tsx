@@ -29,14 +29,15 @@ export default function ChatInterface({ currentChat, onUpdateMessages }: ChatInt
   const handleSendMessage = async (
     text: string, 
     base64Images: string[], 
-    fileMeta?: { name: string; type: string; urlData: string }
+    fileMeta?: { name: string; type: string; urlData: string },
+    docContent?: string
   ) => {
     if (!currentChat || loading) return;
 
     const userMsg = text.trim();
     
     // Construct new user block containing optional attached elements data
-    const newUserNode: any = { role: 'user', content: userMsg };
+    const newUserNode: any = { role: 'user', content: userMsg || (fileMeta ? `Attached File: ${fileMeta.name}` : "") };
     if (fileMeta) {
       newUserNode.fileAttachment = fileMeta;
     }
@@ -66,9 +67,14 @@ export default function ChatInterface({ currentChat, onUpdateMessages }: ChatInt
       });
 
       // Construct latest active frame parameters for the server core block
+      // Inject docContent ONLY into payload, keeping UI clean.
+      const payloadContent = docContent 
+        ? (userMsg ? `${userMsg}\n\n--- Document Content ---\n${docContent}` : docContent) 
+        : userMsg;
+
       const dynamicCurrent: any = {
         role: 'user',
-        content: userMsg
+        content: payloadContent
       };
 
       if (cleanImages.length > 0) {
@@ -107,20 +113,21 @@ export default function ChatInterface({ currentChat, onUpdateMessages }: ChatInt
 
   if (!currentChat) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-center text-gray-400 bg-[#07090c] p-6">
-        <div className="w-16 h-16 bg-gradient-to-br from-blue-600/20 to-cyan-500/20 rounded-2xl flex items-center justify-center border border-cyan-500/20 mb-4 animate-pulse">
-          <Sparkles className="text-cyan-400" size={28} />
+      <div className="h-full flex flex-col items-center justify-center text-center bg-transparent p-6">
+        <div className="w-20 h-20 bg-gradient-to-tr from-cyan-500/20 to-blue-500/20 rounded-3xl flex items-center justify-center border border-white/5 mb-6 shadow-2xl relative overflow-hidden">
+          <div className="absolute inset-0 bg-white/5 backdrop-blur-xl" />
+          <Sparkles className="text-cyan-400 relative z-10 animate-pulse" size={32} />
         </div>
-        <h2 className="text-xl font-bold text-white tracking-wide">Neuro Core Intelligence</h2>
-        <p className="text-xs text-gray-500 mt-1.5 max-w-xs leading-relaxed">
-          Sidebar se <strong className="text-gray-300">"New Chat"</strong> select karein taake workspace telemetry pipeline shuru kiya ja sake.
+        <h2 className="text-2xl font-bold text-white tracking-tight mb-2">Neuro Core Intelligence</h2>
+        <p className="text-sm text-gray-400 max-w-sm leading-relaxed">
+          Select <strong className="text-white font-medium">"New Chat"</strong> from the sidebar to initialize your workspace telemetry pipeline.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#07090c] text-gray-200 overflow-hidden">
+    <div className="h-full flex flex-col bg-transparent text-gray-200 overflow-hidden relative">
       <ChatHeader 
         currentChatId={currentChat.id}
         searchQuery={searchQuery}

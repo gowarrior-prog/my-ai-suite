@@ -203,7 +203,19 @@ export default function ResumeBuilder() {
           </div>
         </div>
         {/* RIGHT PANEL: LIVE PRINT PREVIEW - CLEAR ACCURATE VIEW */}
-        <div className="lg:col-span-7 bg-white text-black p-8 shadow-xl flex flex-col min-h-[800px] max-w-[210mm] mx-auto w-full print:border-none print:shadow-none print:rounded-none print:p-0 print:h-auto overflow-hidden font-sans border border-gray-100 rounded-2xl">
+        {/*
+          Fix: 'font-sans' Tailwind class hata di — wo custom/webfont (jaise next/font se
+          load hui Inter/Google Font) resolve karta tha. Jab window.print() se PDF banta hai,
+          Chrome custom fonts ko subset karta hai aur kabhi kabhi proper ToUnicode mapping
+          include nahi karta — isse PDF text extraction (pdf-parse/pdfjs) garbled/gibberish
+          characters deta hai, chahe PDF visually bilkul sahi dikhe. Standard system font
+          (Arial/Helvetica) force karne se Chrome usse embed/subset nahi karta, isliye
+          extraction clean rehta hai.
+        */}
+        <div 
+          className="lg:col-span-7 bg-white text-black p-8 shadow-xl flex flex-col min-h-[800px] max-w-[210mm] mx-auto w-full print:border-none print:shadow-none print:rounded-none print:p-0 print:h-auto overflow-hidden border border-gray-100 rounded-2xl"
+          style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
+        >
           
           {/* Executive Header Segment */}
           <div className="text-center border-b-2 border-gray-900 pb-4">
@@ -231,7 +243,7 @@ export default function ResumeBuilder() {
             <h3 className="text-[11px] font-black tracking-widest text-gray-900 uppercase flex items-center gap-2 border-b border-gray-200 pb-0.5">
               PROFESSIONAL EXPERIENCE
             </h3>
-            <div className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed font-sans pl-1">
+            <div className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed pl-1">
               {resumeData.experience || "Aapka workspace track yahan automatically bullet points mein display hoga."}
             </div>
           </div>

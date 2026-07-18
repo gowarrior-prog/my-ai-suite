@@ -2,8 +2,12 @@
 
 import { useEffect } from "react";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
-// Use the worker entry that works reliably with bundlers
-// import pdfWorkerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+
+// ✅ Next.js/webpack compatible way to reference the worker asset
+GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url
+).toString();
 
 type PDFExtractionWorkerProps = {
   file: File | null;
@@ -34,8 +38,6 @@ export default function PDFExtractionWorker({
       onStart?.();
 
       try {
-        GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
-
         const arrayBuffer = await file.arrayBuffer();
         const loadingTask = getDocument({ data: arrayBuffer });
 

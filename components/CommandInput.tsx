@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { SendHorizontal, Mic, Plus, Paperclip, FileText as FileIcon, X, Image as ImageIcon } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 type FileMeta = {
   name: string;
@@ -9,7 +10,7 @@ type FileMeta = {
 };
 
 type CommandInputProps = {
-  onSendMessage: (text: string, base64Images: string[], fileMeta?: FileMeta) => void;
+  onSendMessage: (text: string, base64Images: string[], fileMeta?: FileMeta, docContent?: string) => void;
   loading: boolean;
 };
 
@@ -25,61 +26,75 @@ export default function CommandInput({ onSendMessage, loading }: CommandInputPro
   const [isParsingPdf, setIsParsingPdf] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachMenuRef = useRef<HTMLDivElement>(null);
 
-  // Persist attachment
+  // Load saved attachment
   useEffect(() => {
     const saved = localStorage.getItem("attachedFile");
     if (saved) {
-      const data = JSON.parse(saved);
-      setAttachedFileName(data.name || "");
-      setAttachedFileType(data.type || "");
-      setRawFileUrlData(data.urlData || "");
-      setDocumentContent(data.documentContent || "");
-      setAttachedImages(data.attachedImages || []);
+      try {
+        const data = JSON.parse(saved);
+        setAttachedFileName(data.name || "");
+        setAttachedFileType(data.type || "");
+        setRawFileUrlData(data.urlData || "");
+        setDocumentContent(data.documentContent || "");
+        setAttachedImages(data.attachedImages || []);
+      } catch (e) {
+        console.error("Failed to load saved attachment");
+      }
     }
   }, []);
 
-  const saveToLocalStorage = () => {
-    if (attachedFileName) {
-      localStorage.setItem("attachedFile", JSON.stringify({
-        name: attachedFileName,
-        type: attachedFileType,
-        urlData: rawFileUrlData,
-        documentContent,
-        attachedImages,
-      }));
+  // Close menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (attachMenuRef.current && !attachMenuRef.current.contains(event.target as Node)) {
+        setShowAttachMenu(false);
+      }
+    };
+
+    if (showAttachMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
     }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showAttachMenu]);
+
+  const saveToLocalStorage = () => {
+    localStorage.setItem("attachedFile", JSON.stringify({
+      name: attachedFileName,
+      type: attachedFileType,
+      urlData: rawFileUrlData,
+      documentContent,
+      attachedImages,
+    }));
   };
 
   const readFileAsDataURL = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.readAsDataURL(file);
       reader.onload = () => resolve(String(reader.result));
       reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
     });
   };
 
   const extractTextFromPDF = async (file: File): Promise<string> => {
     try {
-      const pdfjsLib = await import("pdfjs-dist");
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.mjs`;
+      const formData = new FormData();
+      formData.append('file', file);
 
-      const arrayBuffer = await file.arrayBuffer();
-      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-      const pdf = await loadingTask.promise;
-      let fullText = "";
+      const response = await fetch('/api/extract-pdf', {
+        method: 'POST',
+        body: formData,
+      });
 
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items.map((item: any) => item.str || "").join(" ");
-        fullText += pageText + "\n";
-      }
-      return fullText.trim();
+      if (!response.ok) throw new Error('PDF extraction failed');
+
+      const data = await response.json();
+      return data.text || "[PDF content could not be extracted]";
     } catch (error) {
       console.error("PDF parsing error:", error);
-      return "[PDF text extraction failed. The full file is attached for analysis.]";
+      return "[PDF text extraction failed. Full file is still attached.]";
     }
   };
 
@@ -99,62 +114,57 @@ export default function CommandInput({ onSendMessage, loading }: CommandInputPro
     if (!file) return;
 
     setAttachedFileName(file.name);
-    setAttachedFileType(file.type || "application/octet-stream");
+    setAttachedFileType(file.type);
     setShowAttachMenu(false);
 
     try {
       const fullDataUrl = await readFileAsDataURL(file);
       setRawFileUrlData(fullDataUrl);
 
-      const isImage = file.type.startsWith("image/") || /\.(png|jpg|jpeg|webp|gif)$/i.test(file.name);
-      const isText = file.type.startsWith("text/") || /\.(txt|json|md|csv)$/i.test(file.name);
+      const isImage = file.type.startsWith("image/");
+      const isText = /\.(txt|md|json|csv)$/i.test(file.name);
       const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
 
       if (isImage) {
         const cleanBase64 = fullDataUrl.split(",")[1] || "";
         setAttachedImages([cleanBase64]);
         setDocumentContent("");
-      } else if (isText) {
-        const textContent = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = (e) => resolve(String(e.target?.result));
-          reader.readAsText(file);
-        });
+      } 
+      else if (isText) {
+        const textContent = await file.text();
         setDocumentContent(textContent);
         setAttachedImages([]);
-      } else if (isPdf) {
+      } 
+      else if (isPdf) {
         setIsParsingPdf(true);
-        setInput("Processing PDF...");
-
-        const extractedText = await extractTextFromPDF(file);
-        setDocumentContent(extractedText);
-        setAttachedImages([]);
-        setInput("");
-        setIsParsingPdf(false);
-      } else {
+        try {
+          const extractedText = await extractTextFromPDF(file);
+          setDocumentContent(extractedText);
+          setAttachedImages([]);
+        } finally {
+          // Fix: yahan pehle isParsingPdf ko wapas false nahi kiya ja raha tha,
+          // isliye extraction complete hone ke baad bhi input field disabled
+          // aur "Processing PDF..." placeholder hamesha stuck reh jaata tha.
+          setIsParsingPdf(false);
+        }
+      } 
+      else {
         setDocumentContent("");
         setAttachedImages([]);
       }
 
       saveToLocalStorage();
     } catch (error) {
-      console.error("File attachment error:", error);
-      alert("Failed to process file");
+      console.error("File processing error:", error);
+      alert("Failed to process the file");
       clearAttachment();
     }
   };
 
   const toggleVoiceRecording = () => {
-    if (typeof window === "undefined") return;
-
     const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
     if (!SpeechRecognitionAPI) {
-      alert("Browser does not support voice typing.");
-      return;
-    }
-
-    if (isRecording) {
+      alert("Voice input not supported in this browser.");
       return;
     }
 
@@ -165,11 +175,10 @@ export default function CommandInput({ onSendMessage, loading }: CommandInputPro
     recognition.onstart = () => setIsRecording(true);
     recognition.onend = () => setIsRecording(false);
     recognition.onerror = () => setIsRecording(false);
+
     recognition.onresult = (event: any) => {
-      const voiceResult = event.results?.[0]?.[0]?.transcript || "";
-      if (voiceResult) {
-        setInput((prev) => (prev ? `${prev} ${voiceResult}` : voiceResult));
-      }
+      const transcript = event.results[0][0].transcript;
+      setInput(prev => prev ? `${prev} ${transcript}` : transcript);
     };
 
     recognition.start();
@@ -178,93 +187,104 @@ export default function CommandInput({ onSendMessage, loading }: CommandInputPro
   const handleTriggerSend = () => {
     if (loading || isRecording || isParsingPdf) return;
 
-    const userPromptText = input.trim();
-    if (!userPromptText && !documentContent && !attachedImages.length) return;
+    const userText = input.trim();
+    if (!userText && !documentContent && !attachedImages.length) return;
 
-    let finalPromptPayload = userPromptText;
+    let finalText = userText;
 
-    if (documentContent) {
-      finalPromptPayload = userPromptText
-        ? `${userPromptText}\n\n---\n[ATTACHED DOCUMENT]\n${documentContent}`
-        : `Analyze the attached document and give a detailed response.\n\n${documentContent}`;
-    }
+    const fileMeta = attachedFileName ? {
+      name: attachedFileName,
+      type: attachedFileType,
+      urlData: rawFileUrlData
+    } : undefined;
 
-    const fileMetaPayload = attachedFileName && rawFileUrlData
-      ? { name: attachedFileName, type: attachedFileType, urlData: rawFileUrlData }
-      : undefined;
-
-    onSendMessage(finalPromptPayload, attachedImages, fileMetaPayload);
+    onSendMessage(finalText, attachedImages, fileMeta, documentContent);
+    
+    // Clear after sending
     clearAttachment();
     setInput("");
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-[#050709] via-[#050709] to-transparent p-3 md:p-4 z-50 border-t border-white/10">
-      <div className="max-w-3xl mx-auto">
-        {/* Attached File Badge */}
+    <div className="relative p-4 md:p-6 pb-6 w-full max-w-4xl mx-auto z-40">
+      {/* Attached File Indicator */}
+      <AnimatePresence>
         {attachedFileName && (
-          <div className="flex items-center gap-2 bg-[#11151d] border border-cyan-500/20 px-3 py-1.5 rounded-xl mb-2 w-max mx-auto md:mx-0">
-            {attachedImages.length > 0 ? <ImageIcon size={12} className="text-cyan-400" /> : <FileIcon size={12} className="text-purple-400" />}
-            <span className="text-[11px] font-mono text-gray-300 max-w-[200px] truncate">
-              {isParsingPdf ? "Extracting..." : attachedFileName}
-            </span>
-            <button onClick={() => clearAttachment()} className="text-gray-500 hover:text-red-400 p-0.5" type="button">
-              <X size={12} />
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="absolute -top-11 left-6 flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 px-4 py-2 rounded-full text-sm"
+          >
+            {attachedImages.length > 0 ? <ImageIcon size={16} className="text-cyan-400" /> : <FileIcon size={16} className="text-indigo-400" />}
+            <span className="truncate max-w-[180px] text-white/90">{attachedFileName}</span>
+            <button onClick={clearAttachment} className="ml-1 text-red-400 hover:text-red-500">
+              <X size={16} />
             </button>
-          </div>
+          </motion.div>
         )}
+      </AnimatePresence>
 
-        <div className="relative flex items-center bg-[#13171e]/95 border border-white/[0.08] focus-within:border-cyan-500/50 rounded-2xl pl-4 pr-2 py-2 md:py-3 shadow-2xl">
+      <div className="relative flex items-center bg-white/5 hover:bg-white/10 backdrop-blur-xl border border-white/10 focus-within:border-cyan-500/50 rounded-3xl p-2 shadow-2xl transition-all">
+        
+        {/* Attach Button */}
+        <div className="relative" ref={attachMenuRef}>
           <button
             onClick={() => setShowAttachMenu(!showAttachMenu)}
-            className={`p-2 rounded-xl hover:bg-white/5 transition-colors ${showAttachMenu ? "bg-white/10 text-cyan-400" : "text-gray-400"}`}
+            className={`p-3 rounded-full transition-all ${showAttachMenu ? "bg-cyan-500 text-black rotate-45" : "text-gray-400 hover:text-white hover:bg-white/10"}`}
             type="button"
           >
-            <Plus size={20} className={`transition-transform ${showAttachMenu ? "rotate-45" : ""}`} />
+            <Plus size={20} />
           </button>
 
-          <input
-            type="text"
-            className="flex-1 bg-transparent px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none min-w-0"
-            placeholder={isParsingPdf ? "Processing document..." : "Message Neuro Core..."}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleTriggerSend()}
-            disabled={isRecording || isParsingPdf}
-          />
-
-          <button
-            onClick={toggleVoiceRecording}
-            className={`p-2 rounded-xl transition-all ${isRecording ? "text-red-400 bg-red-500/10" : "text-gray-400 hover:text-white"}`}
-            type="button"
-          >
-            <Mic size={20} />
-          </button>
-
-          <button
-            onClick={handleTriggerSend}
-            disabled={(!input.trim() && !documentContent && !attachedImages.length) || loading || isRecording || isParsingPdf}
-            className="ml-1 p-2.5 bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 text-black rounded-xl transition-all disabled:opacity-50"
-            type="button"
-          >
-            <SendHorizontal size={18} className="stroke-[2.5]" />
-          </button>
+          <AnimatePresence>
+            {showAttachMenu && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                className="absolute bottom-full mb-2 bg-[#1A1D24] border border-white/10 rounded-2xl p-2 shadow-xl w-56 z-50"
+              >
+                <button onClick={() => fileInputRef.current?.click()} className="flex w-full items-center gap-3 px-4 py-3 hover:bg-white/10 rounded-xl text-left">
+                  <Paperclip size={18} className="text-indigo-400" /> Document / PDF
+                </button>
+                <button onClick={() => fileInputRef.current?.click()} className="flex w-full items-center gap-3 px-4 py-3 hover:bg-white/10 rounded-xl text-left">
+                  <ImageIcon size={18} className="text-cyan-400" /> Image
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
-        {/* Attach Menu */}
-        {showAttachMenu && (
-          <div className="absolute bottom-16 left-4 bg-[#0F1217] border border-white/10 rounded-2xl p-2 shadow-2xl z-50 flex flex-col gap-1">
-            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-white/5 rounded-xl w-full text-left" type="button">
-              <Paperclip size={18} className="text-cyan-400" /> Document / PDF
-            </button>
-            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-white/5 rounded-xl w-full text-left" type="button">
-              <ImageIcon size={18} className="text-purple-400" /> Image
-            </button>
-          </div>
-        )}
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleTriggerSend()}
+          placeholder={isParsingPdf ? "Processing PDF..." : "Type your message..."}
+          disabled={loading || isParsingPdf}
+          className="flex-1 bg-transparent px-4 py-3 text-white placeholder-gray-400 focus:outline-none"
+        />
 
-        <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".pdf,.txt,.json,.md,.png,.jpg,.jpeg" />
+        <button onClick={toggleVoiceRecording} className={`p-3 rounded-full ${isRecording ? "text-red-400 animate-pulse" : "text-gray-400 hover:text-white"}`} type="button">
+          <Mic size={20} />
+        </button>
+
+        <button
+          onClick={handleTriggerSend}
+          disabled={loading || isParsingPdf || (!input.trim() && !documentContent && !attachedImages.length)}
+          className="ml-2 p-3 bg-gradient-to-r from-cyan-500 to-blue-500 disabled:from-gray-600 text-black rounded-full transition-all min-w-[48px] min-h-[48px] flex items-center justify-center"
+          type="button"
+        >
+          {loading ? (
+            <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+          ) : (
+            <SendHorizontal size={20} />
+          )}
+        </button>
       </div>
+
+      <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".pdf,.txt,.md,.json,.png,.jpg,.jpeg" />
     </div>
   );
 }

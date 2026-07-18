@@ -118,7 +118,7 @@ export default function Home() {
         onCreateNewChat={handleCreateNewChat}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-r border-white/[0.03] bg-[#07090c]">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-r border-white/[0.05] bg-transparent">
         <ChatInterface
           currentChat={currentChat}
           onUpdateMessages={(msgs) =>
