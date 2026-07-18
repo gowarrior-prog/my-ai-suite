@@ -97,9 +97,9 @@ export async function signupAction(data: z.infer<typeof signupSchema>): Promise<
   try {
     const validated = signupSchema.safeParse(data);
     if (!validated.success) {
-      return { error: validated.error.errors[0]?.message || "Validation failed" };
+      // Zod Error ke andar structural data check karne ke liye .issues property use hoti hai
+      return { error: validated.error.issues[0]?.message || "Validation failed" };
     }
-
     const { fullName, email, password } = validated.data;
 
     const existingUser = users.find((u) => u.email === email);
@@ -195,7 +195,8 @@ export async function updateThemeAction(theme: ThemePrefs): Promise<ThemeRespons
   try {
     const validated = themeSchema.safeParse(theme);
     if (!validated.success) {
-      return { error: validated.error.errors[0]?.message || "Invalid theme data" };
+      // .errors[0] ko badal kar .issues[0] kar diya taake TypeScript type checker pass ho jaye
+      return { error: validated.error.issues[0]?.message || "Invalid theme data" };
     }
 
     const cookieStore = await cookies();
@@ -244,10 +245,9 @@ export async function updateVisibilityAction(visibility: Visibility): Promise<Vi
 export async function logoutAction() {
   try {
     const cookieStore = await cookies();
-    // Fix: cookie set karte waqt path: "/" use hua tha, isliye delete karte
-    // waqt bhi wahi path match karna zaroori hai — warna cookie clear hi
-    // nahi hoti aur agli baar getCurrentUser() ko purana userId milta rehta hai.
-    cookieStore.delete("userId", { path: "/" });
+    // Fix: Next.js 16 mein options ko ek hi object ke andar pass kiya jata hai
+    cookieStore.delete({ name: "userId", path: "/" });
+    
     revalidatePath("/");
   } catch (error) {
     console.error("Logout Error:", error);

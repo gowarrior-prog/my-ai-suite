@@ -22,9 +22,9 @@ export default function ResumeBuilder() {
   });
 
   // Inputs ko change karne wala single handler function
-  const handleInputChange = (e) => {
-    setResumeData({ ...resumeData, [e.target.name]: e.target.value });
-  };
+const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  setResumeData({ ...resumeData, [e.target.name]: e.target.value });
+};
   const handleCustomAICommand = async () => {
     if (!customCommand.trim() || customLoading) return;
     setCustomLoading(true);
