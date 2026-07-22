@@ -1,16 +1,22 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
-import { Sparkles, LoaderCircle, Copy, Check, FileEdit, PenTool } from 'lucide-react';
+import { Sparkles, LoaderCircle, Copy, Check, FileEdit, PenTool, Menu } from 'lucide-react';
 
 export default function ContentWriter() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [topic, setTopic] = useState('');
   const [contentType, setContentType] = useState('blog post article');
   const [tone, setTone] = useState('highly professional and corporate');
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setSidebarOpen(window.innerWidth >= 1024);
+    }
+  }, []);
 
   const handleCopy = async () => {
     if (!result) return;
@@ -78,14 +84,21 @@ export default function ContentWriter() {
     <div className="flex h-screen bg-[#050709] text-white overflow-hidden">
       <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} onChatSelect={() => {}} currentChatId={null} onCreateNewChat={() => {}} />
       
-      <div className="flex-1 p-6 md:p-10 overflow-y-auto max-w-5xl mx-auto space-y-6">
+      <div className="flex-1 p-4 md:p-10 overflow-y-auto max-w-5xl mx-auto space-y-6 w-full">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-2xl flex items-center justify-center shadow-lg">
+          <button 
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="lg:hidden p-2 text-gray-400 hover:text-white transition-colors bg-white/5 rounded-xl border border-white/5"
+            aria-label="Toggle Sidebar"
+          >
+            <Menu size={18} />
+          </button>
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-2xl flex items-center justify-center shadow-lg shrink-0">
             <PenTool size={20} className="text-white" />
           </div>
           <div>
-            <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">AI Copywriting Studio</h1>
-            <p className="text-gray-400 mt-0.5 text-sm">Turbo-optimized prompts se instantly high-converting drafts generate karein.</p>
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">AI Copywriting Studio</h1>
+            <p className="text-gray-400 mt-0.5 text-xs md:text-sm">Turbo-optimized prompts se instantly high-converting drafts generate karein.</p>
           </div>
         </div>
 

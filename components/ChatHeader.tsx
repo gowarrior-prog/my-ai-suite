@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from 'react';
-import { Search, Share2, User, LogOut, X } from 'lucide-react';
+import { Search, Share2, User, LogOut, X, Menu } from 'lucide-react';
 import { logoutAction } from '@/app/signup/auth';
 import { useSettingsModal } from '@/app/contexts/SettingsModalContext';
 
@@ -10,6 +10,7 @@ type ChatHeaderProps = {
   setSearchQuery: (query: string) => void;
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
+  onToggleSidebar?: () => void;
 };
 
 export default function ChatHeader({
@@ -18,6 +19,7 @@ export default function ChatHeader({
   setSearchQuery,
   searchOpen,
   setSearchOpen,
+  onToggleSidebar,
 }: ChatHeaderProps) {
   const [shareCopied, setShareCopied] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -67,9 +69,16 @@ export default function ChatHeader({
   };
 
   return (
-    <div className="h-14 border-b border-white/[0.03] flex items-center justify-between px-6 bg-[#050709]/80 backdrop-blur-md z-30 relative select-none">
-      {/* Brand */}
+    <div className="h-14 border-b border-white/[0.03] flex items-center justify-between px-4 md:px-6 bg-[#050709]/80 backdrop-blur-md z-30 relative select-none">
+      {/* Brand & Mobile Toggle */}
       <div className="flex items-center gap-3">
+        <button 
+          onClick={onToggleSidebar}
+          className="lg:hidden p-1 text-gray-400 hover:text-white transition-colors"
+          aria-label="Toggle Sidebar"
+        >
+          <Menu size={18} />
+        </button>
         <h1 className="font-bold text-sm tracking-wide text-white uppercase">NEURO</h1>
         <div className="bg-[#0e1619] border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1.5">
           <span className="w-1 h-1 rounded-full bg-emerald-400" />

@@ -1,16 +1,22 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
-import { LoaderCircle, Sparkles, Printer, Wand2, Terminal } from 'lucide-react';
+import { LoaderCircle, Sparkles, Printer, Wand2, Terminal, Menu } from 'lucide-react';
 
 export default function ResumeBuilder() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [expLoading, setExpLoading] = useState(false);
-  const [customLoading, setCustomLoading] = useState(false); 
+  const [customLoading, setCustomLoading] = useState(false);
   const [customCommand, setCustomCommand] = useState('');
 
-  // Resume ka saara data is state ke andar save hoga
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setSidebarOpen(window.innerWidth >= 1024);
+    }
+  }, []);
+
+  // Resume data with guaranteed defaults
   const [resumeData, setResumeData] = useState({
     fullName: 'John Doe',
     jobTitle: 'Full Stack Developer',
@@ -21,16 +27,30 @@ export default function ResumeBuilder() {
     aiSummary: 'Results-driven Full Stack Developer with expertise in React, Node.js, and cloud architectures.'
   });
 
-  // Inputs ko change karne wala single handler function
-const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-  setResumeData({ ...resumeData, [e.target.name]: e.target.value });
-};
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setResumeData(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Safe AI update - always preserve all fields
+  const updateResumeData = (newData: Partial<typeof resumeData>) => {
+    setResumeData(prev => ({
+      fullName: newData.fullName ?? prev.fullName ?? '',
+      jobTitle: newData.jobTitle ?? prev.jobTitle ?? '',
+      email: newData.email ?? prev.email ?? '',
+      skills: newData.skills ?? prev.skills ?? '',
+      experience: newData.experience ?? prev.experience ?? '',
+      education: newData.education ?? prev.education ?? '',
+      aiSummary: newData.aiSummary ?? prev.aiSummary ?? '',
+    }));
+  };
+
   const handleCustomAICommand = async () => {
     if (!customCommand.trim() || customLoading) return;
     setCustomLoading(true);
 
     const systemPrompt = `You are an expert AI Resume Editor. You must output a valid JSON object ONLY. 
-    Do not reply with any markdown block formatting (do not use \`\`\`json or \`\`\`), conversational intros, or explanations.
+    Do not reply with any markdown, explanations, or extra text.
     Current Resume Data: ${JSON.stringify(resumeData)}
     Expected output structure must match this JSON format exactly:
     { "fullName": "...", "jobTitle": "...", "email": "...", "skills": "...", "experience": "...", "education": "...", "aiSummary": "..." }`;
@@ -46,88 +66,113 @@ const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaE
           ]
         }),
       });
-      const data = await res.json();
-      
-      if (data.reply) {
-        let jsonString = data.reply.trim();
-        jsonString = jsonString.replace(/```json/gi, '').replace(/```/g, '').trim();
 
-        const jsonStartIndex = jsonString.indexOf('{');
-        const jsonEndIndex = jsonString.lastIndexOf('}');
-        
-        if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
-          jsonString = jsonString.substring(jsonStartIndex, jsonEndIndex + 1);
-          setResumeData(JSON.parse(jsonString));
-          setCustomCommand(''); 
+      const data = await res.json();
+      if (data.reply) {
+        let jsonString = data.reply.trim()
+          .replace(/```json/gi, '')
+          .replace(/```/g, '')
+          .trim();
+
+        const jsonStart = jsonString.indexOf('{');
+        const jsonEnd = jsonString.lastIndexOf('}');
+
+        if (jsonStart !== -1 && jsonEnd !== -1) {
+          jsonString = jsonString.substring(jsonStart, jsonEnd + 1);
+          const parsed = JSON.parse(jsonString);
+          updateResumeData(parsed);
+          setCustomCommand('');
         } else {
-          alert("AI ne sahi structure return nahi kiya. Dubara koshish karein.");
+          alert("AI ne sahi JSON structure return nahi kiya. Dubara try karein.");
         }
       }
     } catch (err) {
       console.error(err);
-      alert('Local Ollama connection error.');
+      alert('AI command failed. Check Ollama connection.');
     } finally {
       setCustomLoading(false);
     }
   };
-  // AI Professional Summary Generator
+
   const generateAISummary = async () => {
     if (!resumeData.jobTitle || !resumeData.skills || summaryLoading) return;
     setSummaryLoading(true);
     const systemInstruction = "You are an expert resume writer. Output ONLY the executive summary text. No fillers, no quotes.";
+
     try {
-      const res = await fetch('/api/chat', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ 
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           historyPayload: [
             { role: 'system', content: systemInstruction },
             { role: 'user', content: `Write a professional 3-sentence summary. Role: ${resumeData.jobTitle}, Skills: ${resumeData.skills}.` }
           ]
-        }) 
+        })
       });
       const data = await res.json();
-      if (data.reply) setResumeData(prev => ({ ...prev, aiSummary: data.reply.trim().replace(/^["']|["']$/g, '') }));
-    } catch (err) { console.error(err); } finally { setSummaryLoading(false); }
+      if (data.reply) {
+        updateResumeData({ aiSummary: data.reply.trim().replace(/^["']|["']$/g, '') });
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSummaryLoading(false);
+    }
   };
 
-  // ATS Work Experience Optimizer
   const enhanceWorkExperience = async () => {
     if (!resumeData.experience || expLoading) return;
     setExpLoading(true);
     const systemInstruction = "You are an ATS engine. Output ONLY professional bullet points using action verbs. No conversational text.";
+
     try {
-      const res = await fetch('/api/chat', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ 
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           historyPayload: [
             { role: 'system', content: systemInstruction },
             { role: 'user', content: `Convert this to 3 resume bullets: ${resumeData.experience}` }
           ]
-        }) 
+        })
       });
       const data = await res.json();
-      if (data.reply) setResumeData(prev => ({ ...prev, experience: data.reply.trim() }));
-    } catch (err) { console.error(err); } finally { setExpLoading(false); }
+      if (data.reply) {
+        updateResumeData({ experience: data.reply.trim() });
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setExpLoading(false);
+    }
   };
 
   const handlePrint = () => { window.print(); };
+
   return (
     <div className="flex h-screen bg-[#050709] text-white overflow-hidden">
       <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} onChatSelect={() => {}} currentChatId={null} onCreateNewChat={() => {}} />
 
-      {/* COMPACT LAYOUT CONTAINER */}
       <div className="flex-1 overflow-y-auto p-4 md:p-8 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-5 print:p-0 print:bg-white print:text-black w-full">
         
-        {/* LEFT CONTROL BOARD - COMPACT PANELS */}
-        <div className="lg:col-span-5 space-y-4 print:hidden">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-500 bg-clip-text text-transparent">AI Resume Studio Pro</h1>
-            <p className="text-xs text-gray-400 mt-0.5">Llama 3.2 local custom intelligence terminal live.</p>
+        {/* LEFT CONTROL BOARD */}
+        <div className="lg:col-span-5 space-y-4 print:hidden w-full">
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="lg:hidden p-2 text-gray-400 hover:text-white transition-colors bg-white/5 rounded-xl border border-white/5"
+              aria-label="Toggle Sidebar"
+            >
+              <Menu size={18} />
+            </button>
+            <div>
+              <h1 className="text-xl md:text-2xl font-bold tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-500 bg-clip-text text-transparent">AI Resume Studio Pro</h1>
+              <p className="text-xs text-gray-400 mt-0.5">Llama 3.2 local custom intelligence terminal live.</p>
+            </div>
           </div>
 
-          {/* THE DYNAMIC CUSTOM AI COMMAND INTERFACE */}
+          {/* Custom AI Prompter */}
           <div className="bg-gradient-to-br from-purple-900/20 via-[#0A0A0A] to-[#0A0A0A] p-4 rounded-2xl border border-purple-500/10 shadow-xl space-y-2">
             <div className="flex items-center gap-2 text-purple-400 text-[10px] font-bold tracking-wider uppercase">
               <Terminal size={12} /> Custom AI Prompter / Editor
@@ -151,129 +196,171 @@ const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaE
             </div>
           </div>
 
-          {/* DYNAMIC FORMS SECTION */}
+          {/* DYNAMIC FORMS */}
           <div className="bg-[#0A0A0A] p-4 rounded-2xl border border-white/5 space-y-3.5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="text-[10px] font-semibold text-gray-400 uppercase block mb-1">Full Name</label>
-                <input type="text" name="fullName" className="w-full bg-[#1F1F1F] border border-white/5 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition-all" value={resumeData.fullName} onChange={handleInputChange} />
+                <input 
+                  type="text" 
+                  name="fullName" 
+                  className="w-full bg-[#1F1F1F] border border-white/5 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition-all" 
+                  value={resumeData.fullName} 
+                  onChange={handleInputChange} 
+                />
               </div>
               <div>
                 <label className="text-[10px] font-semibold text-gray-400 uppercase block mb-1">Target Job Title</label>
-                <input type="text" name="jobTitle" className="w-full bg-[#1F1F1F] border border-white/5 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition-all" value={resumeData.jobTitle} onChange={handleInputChange} />
+                <input 
+                  type="text" 
+                  name="jobTitle" 
+                  className="w-full bg-[#1F1F1F] border border-white/5 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition-all" 
+                  value={resumeData.jobTitle} 
+                  onChange={handleInputChange} 
+                />
               </div>
             </div>
 
             <div>
               <label className="text-[10px] font-semibold text-gray-400 uppercase block mb-1">Email Address</label>
-              <input type="email" name="email" className="w-full bg-[#1F1F1F] border border-white/5 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition-all" value={resumeData.email} onChange={handleInputChange} />
+              <input 
+                type="email" 
+                name="email" 
+                className="w-full bg-[#1F1F1F] border border-white/5 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition-all" 
+                value={resumeData.email} 
+                onChange={handleInputChange} 
+              />
             </div>
 
             <div>
               <label className="text-[10px] font-semibold text-gray-400 uppercase block mb-1">Skills (Comma Separated)</label>
-              <input type="text" name="skills" className="w-full bg-[#1F1F1F] border border-white/5 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition-all" value={resumeData.skills} onChange={handleInputChange} />
+              <input 
+                type="text" 
+                name="skills" 
+                className="w-full bg-[#1F1F1F] border border-white/5 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition-all" 
+                value={resumeData.skills} 
+                onChange={handleInputChange} 
+              />
             </div>
 
             <div>
               <div className="flex justify-between items-center mb-1">
                 <label className="text-[10px] font-semibold text-gray-400 uppercase block">Work Experience</label>
-                <button onClick={enhanceWorkExperience} disabled={expLoading || !resumeData.experience} className="text-[9px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-bold tracking-wider uppercase transition-all disabled:opacity-30">
+                <button 
+                  onClick={enhanceWorkExperience} 
+                  disabled={expLoading || !resumeData.experience} 
+                  className="text-[9px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-bold tracking-wider uppercase transition-all disabled:opacity-30"
+                >
                   {expLoading ? <LoaderCircle className="animate-spin" size={10} /> : <Wand2 size={10} />}
                   AI Bullet Optimizer
                 </button>
               </div>
-              <textarea name="experience" rows={4} className="w-full bg-[#1F1F1F] border border-white/5 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 resize-none font-mono text-[11px]" value={resumeData.experience} onChange={handleInputChange} />
+              <textarea 
+                name="experience" 
+                rows={4} 
+                className="w-full bg-[#1F1F1F] border border-white/5 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 resize-none font-mono text-[11px]" 
+                value={resumeData.experience} 
+                onChange={handleInputChange} 
+              />
             </div>
 
             <div>
               <label className="text-[10px] font-semibold text-gray-400 uppercase block mb-1">Education</label>
-              <input type="text" name="education" className="w-full bg-[#1F1F1F] border border-white/5 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition-all" value={resumeData.education} onChange={handleInputChange} />
+              <input 
+                type="text" 
+                name="education" 
+                className="w-full bg-[#1F1F1F] border border-white/5 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 transition-all" 
+                value={resumeData.education} 
+                onChange={handleInputChange} 
+              />
             </div>
 
             <div className="flex gap-2.5 justify-end pt-1">
-              <button onClick={generateAISummary} disabled={summaryLoading || !resumeData.jobTitle || !resumeData.skills} className="flex items-center gap-1.5 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-[11px] font-semibold rounded-lg transition-all disabled:opacity-40">
+              <button 
+                onClick={generateAISummary} 
+                disabled={summaryLoading || !resumeData.jobTitle || !resumeData.skills} 
+                className="flex items-center gap-1.5 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-[11px] font-semibold rounded-lg transition-all disabled:opacity-40"
+              >
                 {summaryLoading ? <LoaderCircle className="animate-spin" size={12} /> : <Sparkles size={12} />}
                 AI Summary
               </button>
-              <button onClick={handlePrint} className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-[11px] font-semibold rounded-lg transition-all">
+              <button 
+                onClick={handlePrint} 
+                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-[11px] font-semibold rounded-lg transition-all"
+              >
                 <Printer size={12} />
                 Download PDF
               </button>
             </div>
           </div>
         </div>
-        {/* RIGHT PANEL: LIVE PRINT PREVIEW - CLEAR ACCURATE VIEW */}
-        {/*
-          Fix: 'font-sans' Tailwind class hata di — wo custom/webfont (jaise next/font se
-          load hui Inter/Google Font) resolve karta tha. Jab window.print() se PDF banta hai,
-          Chrome custom fonts ko subset karta hai aur kabhi kabhi proper ToUnicode mapping
-          include nahi karta — isse PDF text extraction (pdf-parse/pdfjs) garbled/gibberish
-          characters deta hai, chahe PDF visually bilkul sahi dikhe. Standard system font
-          (Arial/Helvetica) force karne se Chrome usse embed/subset nahi karta, isliye
-          extraction clean rehta hai.
-        */}
+
+        {/* ==================== FIXED PRINT PREVIEW ==================== */}
         <div 
-          className="lg:col-span-7 bg-white text-black p-8 shadow-xl flex flex-col min-h-[800px] max-w-[210mm] mx-auto w-full print:border-none print:shadow-none print:rounded-none print:p-0 print:h-auto overflow-hidden border border-gray-100 rounded-2xl"
+          className="lg:col-span-7 bg-white text-black p-8 shadow-xl flex flex-col min-h-[800px] max-w-[210mm] mx-auto w-full 
+                     print:border-none print:shadow-none print:rounded-none print:p-8 print:min-h-0 print:h-auto 
+                     overflow-visible border border-gray-100 rounded-2xl"
           style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
         >
-          
-          {/* Executive Header Segment */}
-          <div className="text-center border-b-2 border-gray-900 pb-4">
-            <h2 className="text-2xl font-black tracking-normal uppercase text-gray-900">{resumeData.fullName || "YOUR FULL NAME"}</h2>
-            <p className="text-blue-700 font-bold text-xs tracking-widest mt-1 uppercase">{resumeData.jobTitle || "PROFESSIONAL JOB ARCHITECT"}</p>
-            <div className="flex justify-center items-center gap-3 text-gray-500 text-[11px] mt-1.5 font-medium">
+          {/* Header */}
+          <div className="text-center border-b-2 border-gray-900 pb-6">
+            <h2 className="text-3xl font-black tracking-tight uppercase text-gray-900">
+              {resumeData.fullName || "YOUR FULL NAME"}
+            </h2>
+            <p className="text-blue-700 font-bold text-sm tracking-widest mt-1 uppercase">
+              {resumeData.jobTitle || "PROFESSIONAL JOB ARCHITECT"}
+            </p>
+            <div className="flex justify-center items-center gap-3 text-gray-600 text-sm mt-3">
               <span>{resumeData.email || "hello@yourdomain.com"}</span>
-              {resumeData.email && <span className="text-gray-300">&bull;</span>}
-              <span>Verified AI Dossier</span>
             </div>
           </div>
 
-          {/* Profile Pitch Block */}
-          <div className="mt-5 space-y-1.5">
-            <h3 className="text-[11px] font-black tracking-widest text-gray-900 uppercase flex items-center gap-2 border-b border-gray-200 pb-0.5">
+          {/* Summary */}
+          <div className="mt-6">
+            <h3 className="text-xs font-bold tracking-widest text-gray-900 uppercase border-b border-gray-300 pb-1 mb-2">
               SUMMARY PROFILE
             </h3>
-            <p className="text-xs text-gray-700 leading-relaxed text-justify">
-              {resumeData.aiSummary || "Details fill karke 'AI Professional Summary' par click karein."}
+            <p className="text-sm text-gray-700 leading-relaxed">
+              {resumeData.aiSummary || "AI Summary generate karein..."}
             </p>
           </div>
 
-          {/* Optimized Experience Grid Block */}
-          <div className="mt-5 space-y-1.5">
-            <h3 className="text-[11px] font-black tracking-widest text-gray-900 uppercase flex items-center gap-2 border-b border-gray-200 pb-0.5">
+          {/* Experience */}
+          <div className="mt-7">
+            <h3 className="text-xs font-bold tracking-widest text-gray-900 uppercase border-b border-gray-300 pb-1 mb-2">
               PROFESSIONAL EXPERIENCE
             </h3>
-            <div className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed pl-1">
-              {resumeData.experience || "Aapka workspace track yahan automatically bullet points mein display hoga."}
+            <div className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">
+              {resumeData.experience || "Work experience yahan aayega..."}
             </div>
           </div>
 
-          {/* Core Proficiencies Badge Grid */}
-          <div className="mt-5 space-y-1.5">
-            <h3 className="text-[11px] font-black tracking-widest text-gray-900 uppercase flex items-center gap-2 border-b border-gray-200 pb-0.5">
+          {/* Skills */}
+          <div className="mt-7">
+            <h3 className="text-xs font-bold tracking-widest text-gray-900 uppercase border-b border-gray-300 pb-1 mb-2">
               TECHNICAL COMPETENCIES
             </h3>
-            <div className="flex flex-wrap gap-1 pt-0.5">
-              {resumeData.skills ? resumeData.skills.split(',').map((skill, index) => (
-                <span key={index} className="bg-gray-100 border border-gray-200 text-gray-800 text-[9px] font-bold px-2 py-0.5 rounded tracking-wide print:bg-white print:border-gray-400">
-                  {skill.trim().toUpperCase()}
-                </span>
-              )) : (
-                <span className="text-xs text-gray-400 italic">No proficiencies declared.</span>
-              )}
+            <div className="flex flex-wrap gap-2">
+              {resumeData.skills ? 
+                resumeData.skills.split(',').map((skill, i) => (
+                  <span key={i} className="bg-gray-100 text-gray-800 text-xs font-medium px-3 py-1 rounded border border-gray-300">
+                    {skill.trim().toUpperCase()}
+                  </span>
+                )) 
+                : <span className="text-gray-400">No skills added</span>
+              }
             </div>
           </div>
 
-          {/* Academic & Education Block */}
-          <div className="mt-5 space-y-1.5">
-            <h3 className="text-[11px] font-black tracking-widest text-gray-900 uppercase flex items-center gap-2 border-b border-gray-200 pb-0.5">
-              EDUCATION & CERTIFICATIONS
+          {/* Education */}
+          <div className="mt-7">
+            <h3 className="text-xs font-bold tracking-widest text-gray-900 uppercase border-b border-gray-300 pb-1 mb-2">
+              EDUCATION
             </h3>
-            <p className="text-xs text-gray-800 font-medium pl-1">
-              {resumeData.education || "University degrees or relevant course modules."}
+            <p className="text-sm text-gray-700 font-medium">
+              {resumeData.education || "Education details yahan aayenge..."}
             </p>
           </div>
-
         </div>
       </div>
     </div>

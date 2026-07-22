@@ -113,8 +113,11 @@ export default function CommandInput({ onSendMessage, loading }: CommandInputPro
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setAttachedFileName(file.name);
-    setAttachedFileType(file.type);
+    const fileName = file.name;
+    const fileType = file.type;
+
+    setAttachedFileName(fileName);
+    setAttachedFileType(fileType);
     setShowAttachMenu(false);
 
     try {
@@ -125,26 +128,27 @@ export default function CommandInput({ onSendMessage, loading }: CommandInputPro
       const isText = /\.(txt|md|json|csv)$/i.test(file.name);
       const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
 
+      let content = "";
+      let images: string[] = [];
+
       if (isImage) {
         const cleanBase64 = fullDataUrl.split(",")[1] || "";
-        setAttachedImages([cleanBase64]);
+        images = [cleanBase64];
+        setAttachedImages(images);
         setDocumentContent("");
       } 
       else if (isText) {
-        const textContent = await file.text();
-        setDocumentContent(textContent);
+        content = await file.text();
+        setDocumentContent(content);
         setAttachedImages([]);
       } 
       else if (isPdf) {
         setIsParsingPdf(true);
         try {
-          const extractedText = await extractTextFromPDF(file);
-          setDocumentContent(extractedText);
+          content = await extractTextFromPDF(file);
+          setDocumentContent(content);
           setAttachedImages([]);
         } finally {
-          // Fix: yahan pehle isParsingPdf ko wapas false nahi kiya ja raha tha,
-          // isliye extraction complete hone ke baad bhi input field disabled
-          // aur "Processing PDF..." placeholder hamesha stuck reh jaata tha.
           setIsParsingPdf(false);
         }
       } 
@@ -153,7 +157,14 @@ export default function CommandInput({ onSendMessage, loading }: CommandInputPro
         setAttachedImages([]);
       }
 
-      saveToLocalStorage();
+      // Directly write fresh data to localStorage to avoid React state timing race conditions
+      localStorage.setItem("attachedFile", JSON.stringify({
+        name: fileName,
+        type: fileType,
+        urlData: fullDataUrl,
+        documentContent: content,
+        attachedImages: images,
+      }));
     } catch (error) {
       console.error("File processing error:", error);
       alert("Failed to process the file");

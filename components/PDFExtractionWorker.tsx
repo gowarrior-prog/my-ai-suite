@@ -5,7 +5,7 @@ import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 
 // ✅ Next.js/webpack compatible way to reference the worker asset
 GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
+  "pdfjs-dist/build/pdf.worker.min.js",
   import.meta.url
 ).toString();
 

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Menu } from 'lucide-react';
 import ChatHeader from './ChatHeader';
 import MessageStream from './MessageStream';
 import CommandInput from './CommandInput';
@@ -16,9 +16,10 @@ type ChatInterfaceProps = {
     }[];
   } | null;
   onUpdateMessages: (messages: any[]) => void;
+  onToggleSidebar?: () => void;
 };
 
-export default function ChatInterface({ currentChat, onUpdateMessages }: ChatInterfaceProps) {
+export default function ChatInterface({ currentChat, onUpdateMessages, onToggleSidebar }: ChatInterfaceProps) {
   const [loading, setLoading] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -113,15 +114,29 @@ export default function ChatInterface({ currentChat, onUpdateMessages }: ChatInt
 
   if (!currentChat) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-center bg-transparent p-6">
-        <div className="w-20 h-20 bg-gradient-to-tr from-cyan-500/20 to-blue-500/20 rounded-3xl flex items-center justify-center border border-white/5 mb-6 shadow-2xl relative overflow-hidden">
-          <div className="absolute inset-0 bg-white/5 backdrop-blur-xl" />
-          <Sparkles className="text-cyan-400 relative z-10 animate-pulse" size={32} />
+      <div className="h-full flex flex-col bg-transparent text-gray-200 overflow-hidden relative">
+        {/* Mobile-only header when no chat selected */}
+        <div className="h-14 border-b border-white/[0.03] flex items-center px-4 bg-[#050709]/80 backdrop-blur-md lg:hidden z-30">
+          <button 
+            onClick={onToggleSidebar}
+            className="p-1 text-gray-400 hover:text-white transition-colors"
+            aria-label="Toggle Sidebar"
+          >
+            <Menu size={18} />
+          </button>
+          <span className="font-black text-xs tracking-wider text-white ml-3">MY-AI-SUITE</span>
         </div>
-        <h2 className="text-2xl font-bold text-white tracking-tight mb-2">Neuro Core Intelligence</h2>
-        <p className="text-sm text-gray-400 max-w-sm leading-relaxed">
-          Select <strong className="text-white font-medium">"New Chat"</strong> from the sidebar to initialize your workspace telemetry pipeline.
-        </p>
+
+        <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
+          <div className="w-20 h-20 bg-gradient-to-tr from-cyan-500/20 to-blue-500/20 rounded-3xl flex items-center justify-center border border-white/5 mb-6 shadow-2xl relative overflow-hidden">
+            <div className="absolute inset-0 bg-white/5 backdrop-blur-xl" />
+            <Sparkles className="text-cyan-400 relative z-10 animate-pulse" size={32} />
+          </div>
+          <h2 className="text-2xl font-bold text-white tracking-tight mb-2">Neuro Core Intelligence</h2>
+          <p className="text-sm text-gray-400 max-w-sm leading-relaxed">
+            Select <strong className="text-white font-medium">"New Chat"</strong> from the sidebar to initialize your workspace telemetry pipeline.
+          </p>
+        </div>
       </div>
     );
   }
@@ -134,6 +149,7 @@ export default function ChatInterface({ currentChat, onUpdateMessages }: ChatInt
         setSearchQuery={setSearchQuery}
         searchOpen={searchOpen}
         setSearchOpen={setSearchOpen}
+        onToggleSidebar={onToggleSidebar}
       />
 
       <MessageStream 

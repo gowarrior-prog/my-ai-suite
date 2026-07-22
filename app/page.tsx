@@ -25,10 +25,15 @@ type Chat = {
 };
 
 export default function Home() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentChat, setCurrentChat] = useState<Chat | null>(null);
 
   useEffect(() => {
+    // Set sidebar open state depending on screen size
+    if (typeof window !== 'undefined') {
+      setSidebarOpen(window.innerWidth >= 1024);
+    }
+
     const saved = localStorage.getItem('neuro-chats');
     if (!saved) return;
 
@@ -124,6 +129,7 @@ export default function Home() {
           onUpdateMessages={(msgs) =>
             currentChat && handleUpdateChatMessages(currentChat.id, msgs)
           }
+          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         />
       </div>
 
